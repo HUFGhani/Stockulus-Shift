@@ -1,0 +1,14 @@
+python uber_shift.py to start the server
+
+python -m SimpleHTTPServer & to view the SS.html page 
+
+TODO:
+
+    * Balance calculation [Server]
+        Send to client
+            Current format: everything seperated by a comma, current price is the third item
+    * Implement changing stock [Client]
+    * IRC [Server]
+    * Extreme-LoFi pixelation affect [Server] 
+
+

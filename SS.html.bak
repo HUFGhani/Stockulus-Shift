@@ -1,0 +1,244 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Stockulus Shift</title>
+
+  <!--Fancy Font-->
+  <link href='http://fonts.googleapis.com/css?family=VT323' rel='stylesheet' type='text/css'>
+
+
+  <!--Retro Canvas-->
+  <script src="gretro.js"></script>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+  <script src="https://cdn.rawgit.com/mohayonao/gretro-text/master/gretro-text.js"></script>
+  <script src="https://cdn.rawgit.com/mohayonao/gretro-text/master/gretro-paint.js"></script>
+
+  <!--Style all the things-->
+  <style type="text/css">
+  body {
+    background-color: black;
+    font-family: 'VT323';
+    color: white;
+  }
+  span.desc {
+    font-size: 15px;
+  }
+  span.good {
+    color:green;
+  }
+  span.bad {
+    color:red;
+  }
+  h1 {
+    font-size: 50px;
+  }
+  h2 {
+    font-size: 35px;
+  }
+  p {
+    font-size: 25px;
+  }
+
+  </style>
+
+  <!--[if lt IE 9]>
+  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+
+  <script type='text/javascript'>
+
+  var gretroCanvas = null;
+  var context = null;
+  var WIDTH = 1024;
+  var HEIGHT = 600;
+
+  var prices = [];
+  var oldPrice = -1;
+  var min = 100000000;
+  var max = 0;
+  var oldEquity = null;
+
+
+  function gameLoop(canvas, context) {
+
+    // Fetch all the information
+    var quickAjax = function(url, fn) {
+      $.ajax({
+        url: url,
+        success: function(data) {
+          fn(data)
+          setTimeout(function(){quickAjax(url, fn)}, 5000)
+        }
+      })
+    }
+
+    var drawFn = function(data) {
+      var newPrice = parseFloat(data).toFixed(2)
+      redraw(data, canvas, context)
+    }
+
+    var balanceFn = function(data) {
+      var newBalance = parseFloat(data).toFixed(2)
+      // TODO: update the balance field
+      $("#profit").text("$"+newBalance)
+
+      if (newBalance < 0) {
+        $("#profit").css("color", "red")
+      } else {
+        $("#profit").css("color", "green")
+      }
+
+    }
+
+
+    var equityFn = function(data) {
+      var newEquity = data;
+      // TODO: update the equity field
+      $("#stock").text(newEquity)
+
+      if (!(newEquity === oldEquity)) {
+        prices = [];
+        oldPrice = -1;
+        min = 10000000;
+        max = 0;
+      }
+      oldEquity = newEquity;
+    }
+
+    quickAjax("http://localhost:8000/price", drawFn) // Get all of the game data
+    quickAjax("http://localhost:8000/balance", balanceFn)
+    quickAjax("http://localhost:8000/stock", equityFn)
+  }
+
+  function redraw(newPrice, canvas, context) {
+      console.log("New price:" + newPrice)
+
+      if (prices.length >= 20) {
+        prices = prices.slice(10, 20);
+      }
+      prices.push(newPrice)
+
+      var maxX = 0;
+      var maxY = 0;
+
+      // Get the canvas extent
+      c = canvas.noStroke().fill(function(x, y) {
+        if (maxX < x) maxX = x;
+        if (maxY < y) maxY = y;
+      }).clear();
+
+      c.clear();
+
+      var tC = function (x, y) {
+        // x = 0 becomes 0
+        // y = 0 becomes maxY
+        var ret = [x, maxY - y];
+        return ret;
+      }
+
+      // Update all the text
+      if (oldPrice < 0) {
+          $("#span-change").text("");
+      } else {
+          var num = ((newPrice-oldPrice)/oldPrice * 100.0).toFixed(2);
+          if (num < 0) {
+            $("#span-change").css("color", "red")
+          } else {
+            $("#span-change").css("color", "green")
+          }
+          $("#span-change").text(num + "%");
+      }
+
+      $("#span-time").text(new Date());
+      $("#span-price").text("$"+newPrice)
+      oldPrice = newPrice;
+
+      var tAbs = function (x, y) {
+        // x between 0 and 1
+        // y between 0 and 1
+        return tC(x * maxX, y * maxY);
+      }
+
+      for (i = 0; i < prices.length; i++) {
+        if (prices[i] > max) max = prices[i];
+      }
+
+      for (i = 0; i < prices.length; i++) {
+        if (prices[i] < min) min = prices[i];
+      }
+
+      if (min == max) return;
+
+      console.log(prices.length )
+
+      for (i = 1; i < prices.length; i++) {
+        var xMinPosition = i*1.0/20;
+        var xMaxPosition = (i+1.0)/20;
+        var yMinPosition = (prices[i-1]-min)/(max-min);
+        var yMaxPosition = (prices[i]-min)/(max-min);
+
+        console.log(min, max)
+
+        var transformedCoordinates1 = tAbs(xMinPosition, yMinPosition);
+        var transformedCoordinates2 = tAbs(xMaxPosition, yMaxPosition);
+
+        console.log(transformedCoordinates1)
+        c = c.stroke([0, 15, 15]).line(
+          transformedCoordinates1[0],
+          transformedCoordinates1[1],
+          transformedCoordinates2[0],
+          transformedCoordinates2[1]
+        );
+      }
+
+      var imageData = context.createImageData(WIDTH, HEIGHT);
+      imageData.data.set(c.toRGBA());
+
+      // TODO: really cool pixelation effect
+      context.putImageData(imageData, 0, 0);
+
+      //setTimeout(function(){gameLoop(canvas, context)}, 1000)
+
+  }
+
+  function beginSimulation() {
+    "use strict";
+    console.log("Starting...")
+    var gretroCanvas = new gretro.Canvas(WIDTH, HEIGHT);
+    console.log(gretroCanvas)
+    var canvas = document.getElementById("canvas");
+    canvas.width = WIDTH;
+    canvas.height = HEIGHT;
+    context = canvas.getContext("2d");
+    var imageData = context.createImageData(WIDTH, HEIGHT);
+
+    imageData.data.set(gretroCanvas.toRGBA());
+    //context.putImageData(imageData, 0, 0);
+    context.imageSmoothingEnabled = false;
+    //draw(gretroCanvas, context);
+    gameLoop(gretroCanvas , context);
+  }
+
+  </script>
+
+</head>
+
+<body onload='javascript:beginSimulation()'>
+
+  <div id="header">
+    <h1 style="display:inline">Stockulus Shift</h1>
+    <h2 style="display:inline"><span id="span-price">$307.82</span> <span class="good" id="span-change">(+5 &#37;)</span>
+      <span id="stock">NASDAQ: FB</span> <span id="span-time">6-03-2015 11:04:05</span> <span id="profit">-$340.00</span> <span class="desc">Profit</span>
+    </h2>
+  </div>
+  <div>
+    <canvas id="canvas" />
+    <canvas id="scaledCanvas" />
+  </div>
+  <!--div><p><span style="color:green" id="stock">FB</span> <span>IBM</span> <span>MSFT</span> <span>AAPL</span></p></div-->
+</body>
+</html>
